@@ -68,8 +68,31 @@ export function StageNavigator() {
     showIndicator();
   }, [showIndicator]);
 
+  const goNext = useCallback(() => {
+    const current = stageRef.current;
+    const next = Math.min(current + 1, STAGES.length - 1);
+    if (next !== current) {
+      setStageIndex(next);
+      scrollToStage(next);
+    }
+    showIndicator();
+  }, [scrollToStage, showIndicator]);
+
+  const goPrev = useCallback(() => {
+    const current = stageRef.current;
+    const next = Math.max(current - 1, 0);
+    if (next !== current) {
+      setStageIndex(next);
+      scrollToStage(next);
+    }
+    showIndicator();
+  }, [scrollToStage, showIndicator]);
+
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      // Ignore key auto-repeat — one stage advance per fresh press only.
+      if (e.repeat) return;
+
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -117,15 +140,18 @@ export function StageNavigator() {
 
   const stage = STAGES[stageIndex];
   const progress = ((stageIndex + 1) / STAGES.length) * 100;
+  const isFirst = stageIndex === 0;
+  const isLast = stageIndex === STAGES.length - 1;
 
   return (
     <div
-      className={`fixed bottom-4 right-4 z-50 transition-opacity duration-500 pointer-events-none ${
-        visible ? "opacity-100" : "opacity-25"
-      }`}
-      aria-hidden="true"
+      className={`fixed bottom-4 right-4 z-50 transition-opacity duration-500 ${
+        visible ? "opacity-100" : "opacity-50"
+      } hover:!opacity-100`}
+      onMouseEnter={showIndicator}
     >
-      <div className="bg-bg/85 backdrop-blur-sm border border-border px-4 py-2.5 min-w-[280px]">
+      {/* Info card */}
+      <div className="bg-bg/90 backdrop-blur-sm border border-border px-4 py-2.5 min-w-[280px]">
         <div className="flex items-center justify-between hud text-[10px]">
           <span className="text-text-tertiary">STAGE</span>
           <span className="text-accent font-bold">
@@ -143,6 +169,47 @@ export function StageNavigator() {
           />
         </div>
       </div>
+
+      {/* F1-style PREV / NEXT buttons */}
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.currentTarget.blur();
+            goPrev();
+          }}
+          disabled={isFirst}
+          aria-label="Previous stage"
+          className="group relative bg-bg/90 backdrop-blur-sm border border-border hover:border-accent disabled:hover:border-border disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-3 py-3 cursor-pointer"
+        >
+          <div className="flex items-center justify-center gap-2 hud text-[11px] text-text-secondary group-hover:text-accent group-disabled:group-hover:text-text-secondary transition-colors">
+            <span className="text-base leading-none">▲</span>
+            <span>PREV</span>
+          </div>
+          <span className="absolute top-0 left-0 w-2 h-2 border-t border-l border-text-tertiary group-hover:border-accent transition-colors" />
+          <span className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-text-tertiary group-hover:border-accent transition-colors" />
+        </button>
+
+        <button
+          type="button"
+          onClick={(e) => {
+            e.currentTarget.blur();
+            goNext();
+          }}
+          disabled={isLast}
+          aria-label="Next stage"
+          className="group relative bg-accent/15 hover:bg-accent disabled:bg-bg/90 disabled:opacity-30 disabled:cursor-not-allowed border border-accent disabled:border-border transition-colors px-3 py-3 cursor-pointer"
+        >
+          <div className="flex items-center justify-center gap-2 hud text-[11px] text-accent group-hover:text-black disabled:text-text-tertiary transition-colors font-bold">
+            <span>NEXT</span>
+            <span className="text-base leading-none">▼</span>
+          </div>
+          <span className="absolute top-0 left-0 w-2 h-2 border-t border-l border-accent" />
+          <span className="absolute bottom-0 right-0 w-2 h-2 border-b border-r border-accent" />
+        </button>
+      </div>
+
+      {/* Help footer */}
       <div className="mt-1.5 hud text-[8px] text-text-muted text-right tracking-[0.3em]">
         SPACE · NEXT &nbsp; ⇧SPACE · PREV
       </div>
