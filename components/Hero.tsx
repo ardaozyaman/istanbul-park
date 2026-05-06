@@ -140,12 +140,33 @@ export function Hero() {
       <div className="flex-1 grid grid-cols-1 md:grid-cols-[42%_58%] relative">
         {/* LEFT — title + story */}
         <div className="relative flex flex-col justify-between p-6 md:p-10 z-10">
-          <div className="space-y-1">
-            <div className="font-mono text-text-tertiary tracking-[0.3em] text-[10px]">
-              ◉ CIRCUIT 03 / TUZLA — ISTANBUL
+          <div>
+            <div className="space-y-1">
+              <div className="font-mono text-text-tertiary tracking-[0.3em] text-[10px]">
+                ◉ CIRCUIT 03 / TUZLA — ISTANBUL
+              </div>
+              <div className="font-mono text-text-tertiary tracking-[0.3em] text-[10px]">
+                41.0837°N · 29.4051°E
+              </div>
             </div>
-            <div className="font-mono text-text-tertiary tracking-[0.3em] text-[10px]">
-              41.0837°N · 29.4051°E
+
+            {/* Presenter / institution credit */}
+            <div className="mt-5 pt-4 border-t border-border/70">
+              <div className="font-mono text-text-tertiary tracking-[0.3em] text-[10px] mb-2.5">
+                ◉ PRESENTED BY
+              </div>
+              <div className="font-mono text-white tracking-[0.12em] text-[14px] leading-snug">
+                METEHAN KAHVECİ
+              </div>
+              <div className="mt-1.5 font-mono text-text-secondary tracking-[0.12em] text-[12px] leading-snug">
+                KARABÜK ÜNİVERSİTESİ
+              </div>
+              <div className="font-mono text-text-secondary tracking-[0.12em] text-[12px] leading-snug">
+                TURİZM FAKÜLTESİ · TURİZM REHBERLİĞİ
+              </div>
+              <div className="mt-2 font-mono text-text-tertiary tracking-[0.3em] text-[10px]">
+                STUDENT ID · 2211304018
+              </div>
             </div>
           </div>
 
