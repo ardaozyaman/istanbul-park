@@ -11,7 +11,7 @@ type Stage = {
   innerOffset?: number;
 };
 
-// 10 stages — matches the original "10-slide" plan.
+// 11 stages — original 10-slide plan + final Kahoot quiz.
 const STAGES: Stage[] = [
   { id: "hero", label: "HERO", selector: "#stage-hero" },
   { id: "intro", label: "PROLOGUE", selector: "#stage-intro" },
@@ -23,6 +23,7 @@ const STAGES: Stage[] = [
   { id: "return", label: "THE RETURN 2027–2031", selector: "#stage-return" },
   { id: "tourism", label: "SCALE OF IMPACT", selector: "#stage-tourism" },
   { id: "outro", label: "CONCLUSION", selector: "#stage-outro" },
+  { id: "quiz", label: "JOIN THE QUIZ · KAHOOT", selector: "#stage-quiz" },
 ];
 
 const ANIM_DURATION_S = 0.85;

@@ -5,6 +5,7 @@ import { Turn8Spotlight } from "@/components/Turn8Spotlight";
 import { ReturnSection } from "@/components/ReturnSection";
 import { TourismImpact } from "@/components/TourismImpact";
 import { Outro } from "@/components/Outro";
+import { QuizSection } from "@/components/QuizSection";
 import { StageNavigator } from "@/components/StageNavigator";
 
 export default function Home() {
@@ -30,6 +31,9 @@ export default function Home() {
       </div>
       <div id="stage-outro">
         <Outro />
+      </div>
+      <div id="stage-quiz">
+        <QuizSection />
       </div>
       <StageNavigator />
     </main>
