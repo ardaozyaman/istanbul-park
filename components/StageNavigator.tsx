@@ -140,32 +140,29 @@ export function StageNavigator() {
     };
   }, []);
 
-  // Keyboard handler — single dispatcher to goToStage. The lock filters spam.
+  // Keyboard handler — single dispatcher to goToStage.
+  // We track currently-held keys ourselves because e.repeat is unreliable
+  // across browsers/OS (notably Windows). A held key only advances ONCE,
+  // no matter how long the OS keeps re-firing keydown.
   useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      // Skip while a stage transition is running. This is the hard guarantee.
-      if (isAnimatingRef.current) {
-        // Still consume the keys we own so the page doesn't scroll natively.
-        if (
-          e.code === "Space" ||
-          e.key === " " ||
-          e.key === "ArrowRight" ||
-          e.key === "ArrowDown" ||
-          e.key === "ArrowLeft" ||
-          e.key === "ArrowUp" ||
-          e.key === "PageDown" ||
-          e.key === "PageUp" ||
-          e.key === "Home" ||
-          e.key === "End"
-        ) {
-          e.preventDefault();
-        }
-        return;
-      }
+    const NAV_KEYS = new Set([
+      "Space",
+      "ArrowRight",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowUp",
+      "PageDown",
+      "PageUp",
+      "Home",
+      "End",
+    ]);
+    const heldKeys = new Set<string>();
 
-      // Skip key auto-repeat — we want one stage advance per fresh press.
-      if (e.repeat) return;
+    const isOurKey = (e: KeyboardEvent) =>
+      NAV_KEYS.has(e.code) || e.key === " ";
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't hijack typing.
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -176,33 +173,66 @@ export function StageNavigator() {
         return;
       }
 
+      if (!isOurKey(e)) return;
+
+      // We own this key — always block native page-scroll behavior.
+      e.preventDefault();
+
+      // 1st defense: if we already counted this key as held, ignore until keyup.
+      // This is the real fix — survives unreliable e.repeat on Windows.
+      if (heldKeys.has(e.code)) return;
+      heldKeys.add(e.code);
+
+      // 2nd defense: e.repeat (keeps Linux/Mac correct).
+      if (e.repeat) return;
+
+      // 3rd defense: while a stage animation is running, swallow.
+      if (isAnimatingRef.current) return;
+
       const current = stageRef.current;
-      let next: number | null = null;
+      let next = current;
 
       if (e.code === "Space" || e.key === " ") {
-        e.preventDefault();
         next = e.shiftKey ? current - 1 : current + 1;
-      } else if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "PageDown") {
-        e.preventDefault();
+      } else if (
+        e.key === "ArrowRight" ||
+        e.key === "ArrowDown" ||
+        e.key === "PageDown"
+      ) {
         next = current + 1;
-      } else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp") {
-        e.preventDefault();
+      } else if (
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowUp" ||
+        e.key === "PageUp"
+      ) {
         next = current - 1;
       } else if (e.key === "Home") {
-        e.preventDefault();
         next = 0;
       } else if (e.key === "End") {
-        e.preventDefault();
         next = STAGES.length - 1;
-      } else {
-        return;
       }
 
       goToStage(next);
     };
 
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
+    const handleKeyUp = (e: KeyboardEvent) => {
+      heldKeys.delete(e.code);
+    };
+
+    // If user alt-tabs / loses focus while holding a key, clear the set so
+    // the next press isn't permanently swallowed.
+    const handleBlur = () => {
+      heldKeys.clear();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
   }, [goToStage]);
 
   const stage = STAGES[stageIndex];
