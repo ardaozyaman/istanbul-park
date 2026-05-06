@@ -25,12 +25,28 @@ const STAGES: Stage[] = [
   { id: "outro", label: "CONCLUSION", selector: "#stage-outro" },
 ];
 
+const ANIM_DURATION_S = 0.85;
+
 export function StageNavigator() {
   const lenis = useLenis();
   const [stageIndex, setStageIndex] = useState(0);
   const [visible, setVisible] = useState(true);
-  const hideTimerRef = useRef<number | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  // Refs — synchronous reads for the keydown handler and the animation lock.
   const stageRef = useRef(0);
+  const isAnimatingRef = useRef(false);
+  const fallbackTimerRef = useRef<number | null>(null);
+  const hideTimerRef = useRef<number | null>(null);
+  const lenisRef = useRef(lenis);
+
+  // Keep refs in sync with reactive values.
+  useEffect(() => {
+    stageRef.current = stageIndex;
+  }, [stageIndex]);
+  useEffect(() => {
+    lenisRef.current = lenis;
+  }, [lenis]);
 
   const showIndicator = useCallback(() => {
     setVisible(true);
@@ -38,59 +54,116 @@ export function StageNavigator() {
     hideTimerRef.current = window.setTimeout(() => setVisible(false), 2600);
   }, []);
 
-  const scrollToStage = useCallback(
-    (index: number) => {
-      const stage = STAGES[index];
-      if (!stage) return;
+  const releaseLock = useCallback(() => {
+    isAnimatingRef.current = false;
+    setIsAnimating(false);
+    if (fallbackTimerRef.current) {
+      window.clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+  }, []);
+
+  // Single entry-point for every navigation source (key, button, anything).
+  // Hard-locks until the scroll animation finishes.
+  const goToStage = useCallback(
+    (next: number) => {
+      // Lock check — if animating, swallow the input entirely.
+      if (isAnimatingRef.current) return;
+
+      const target = Math.max(0, Math.min(STAGES.length - 1, next));
+      const current = stageRef.current;
+      if (target === current) {
+        showIndicator();
+        return;
+      }
+
+      const stage = STAGES[target];
       const el = document.querySelector<HTMLElement>(stage.selector);
       if (!el) return;
 
+      // Engage lock and update the indicator immediately for snappy feedback.
+      isAnimatingRef.current = true;
+      setIsAnimating(true);
+      stageRef.current = target;
+      setStageIndex(target);
+      showIndicator();
+
+      // Compute scroll target.
       const rect = el.getBoundingClientRect();
       const absoluteTop = window.scrollY + rect.top;
-      const target =
-        absoluteTop + (stage.innerOffset ?? 0) * el.offsetHeight;
+      const scrollTarget = absoluteTop + (stage.innerOffset ?? 0) * el.offsetHeight;
 
-      if (lenis) {
-        lenis.scrollTo(target, { duration: 0.95, lock: true });
+      const lenisInstance = lenisRef.current;
+      if (lenisInstance) {
+        lenisInstance.scrollTo(scrollTarget, {
+          duration: ANIM_DURATION_S,
+          lock: true, // blocks wheel/touch during animation
+          force: true, // overrides any prior in-flight scrollTo
+          onComplete: () => releaseLock(),
+        });
+        // Safety net in case onComplete never fires (e.g., navigation interrupt).
+        fallbackTimerRef.current = window.setTimeout(
+          releaseLock,
+          ANIM_DURATION_S * 1000 + 250
+        );
       } else {
-        window.scrollTo({ top: target, behavior: "smooth" });
+        // No Lenis (reduced-motion or pre-mount). Use native smooth scroll
+        // and release the lock after the expected duration.
+        window.scrollTo({ top: scrollTarget, behavior: "smooth" });
+        fallbackTimerRef.current = window.setTimeout(
+          releaseLock,
+          ANIM_DURATION_S * 1000 + 100
+        );
       }
     },
-    [lenis]
+    [releaseLock, showIndicator]
   );
 
-  useEffect(() => {
-    stageRef.current = stageIndex;
-  }, [stageIndex]);
+  const goNext = useCallback(() => {
+    goToStage(stageRef.current + 1);
+  }, [goToStage]);
 
-  // Hide indicator after first paint.
+  const goPrev = useCallback(() => {
+    goToStage(stageRef.current - 1);
+  }, [goToStage]);
+
+  // First-paint indicator pulse.
   useEffect(() => {
     showIndicator();
   }, [showIndicator]);
 
-  const goNext = useCallback(() => {
-    const current = stageRef.current;
-    const next = Math.min(current + 1, STAGES.length - 1);
-    if (next !== current) {
-      setStageIndex(next);
-      scrollToStage(next);
-    }
-    showIndicator();
-  }, [scrollToStage, showIndicator]);
+  // Cleanup pending timers on unmount.
+  useEffect(() => {
+    return () => {
+      if (fallbackTimerRef.current) window.clearTimeout(fallbackTimerRef.current);
+      if (hideTimerRef.current) window.clearTimeout(hideTimerRef.current);
+    };
+  }, []);
 
-  const goPrev = useCallback(() => {
-    const current = stageRef.current;
-    const next = Math.max(current - 1, 0);
-    if (next !== current) {
-      setStageIndex(next);
-      scrollToStage(next);
-    }
-    showIndicator();
-  }, [scrollToStage, showIndicator]);
-
+  // Keyboard handler — single dispatcher to goToStage. The lock filters spam.
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      // Ignore key auto-repeat — one stage advance per fresh press only.
+      // Skip while a stage transition is running. This is the hard guarantee.
+      if (isAnimatingRef.current) {
+        // Still consume the keys we own so the page doesn't scroll natively.
+        if (
+          e.code === "Space" ||
+          e.key === " " ||
+          e.key === "ArrowRight" ||
+          e.key === "ArrowDown" ||
+          e.key === "ArrowLeft" ||
+          e.key === "ArrowUp" ||
+          e.key === "PageDown" ||
+          e.key === "PageUp" ||
+          e.key === "Home" ||
+          e.key === "End"
+        ) {
+          e.preventDefault();
+        }
+        return;
+      }
+
+      // Skip key auto-repeat — we want one stage advance per fresh press.
       if (e.repeat) return;
 
       const target = e.target as HTMLElement | null;
@@ -108,15 +181,13 @@ export function StageNavigator() {
 
       if (e.code === "Space" || e.key === " ") {
         e.preventDefault();
-        next = e.shiftKey
-          ? Math.max(current - 1, 0)
-          : Math.min(current + 1, STAGES.length - 1);
+        next = e.shiftKey ? current - 1 : current + 1;
       } else if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "PageDown") {
         e.preventDefault();
-        next = Math.min(current + 1, STAGES.length - 1);
+        next = current + 1;
       } else if (e.key === "ArrowLeft" || e.key === "ArrowUp" || e.key === "PageUp") {
         e.preventDefault();
-        next = Math.max(current - 1, 0);
+        next = current - 1;
       } else if (e.key === "Home") {
         e.preventDefault();
         next = 0;
@@ -127,21 +198,22 @@ export function StageNavigator() {
         return;
       }
 
-      if (next !== null && next !== current) {
-        setStageIndex(next);
-        scrollToStage(next);
-      }
-      showIndicator();
+      goToStage(next);
     };
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [scrollToStage, showIndicator]);
+  }, [goToStage]);
 
   const stage = STAGES[stageIndex];
   const progress = ((stageIndex + 1) / STAGES.length) * 100;
   const isFirst = stageIndex === 0;
   const isLast = stageIndex === STAGES.length - 1;
+
+  // Buttons and key inputs are disabled when animating so the user gets
+  // tactile feedback that the system is busy.
+  const prevDisabled = isFirst || isAnimating;
+  const nextDisabled = isLast || isAnimating;
 
   return (
     <div
@@ -178,7 +250,7 @@ export function StageNavigator() {
             e.currentTarget.blur();
             goPrev();
           }}
-          disabled={isFirst}
+          disabled={prevDisabled}
           aria-label="Previous stage"
           className="group relative bg-bg/90 backdrop-blur-sm border border-border hover:border-accent disabled:hover:border-border disabled:opacity-30 disabled:cursor-not-allowed transition-colors px-3 py-3 cursor-pointer"
         >
@@ -196,7 +268,7 @@ export function StageNavigator() {
             e.currentTarget.blur();
             goNext();
           }}
-          disabled={isLast}
+          disabled={nextDisabled}
           aria-label="Next stage"
           className="group relative bg-accent/15 hover:bg-accent disabled:bg-bg/90 disabled:opacity-30 disabled:cursor-not-allowed border border-accent disabled:border-border transition-colors px-3 py-3 cursor-pointer"
         >
